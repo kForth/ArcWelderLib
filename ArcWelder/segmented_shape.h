@@ -104,6 +104,7 @@ struct vector : point
 };
 
 #define DEFAULT_MAX_RADIUS_MM 9999.0 // 9.999m
+#define DEFAULT_MIN_RADIUS_MM 0.1 // 0.0001m
 struct circle {
 	circle() {
 		center.x = 0;
@@ -121,9 +122,9 @@ struct circle {
 	point center;
 	double radius;
 
-	static bool try_create_circle(const point &p1, const point &p2, const point &p3, const double max_radius, circle& new_circle);
+	static bool try_create_circle(const point &p1, const point &p2, const point &p3, const double max_radius, const double min_radius, circle& new_circle);
 	
-	static bool try_create_circle(const array_list<printer_point>& points, const double max_radius, const double resolutino_mm, const double xyz_tolerance, bool allow_3d_arcs, circle& new_circle);
+	static bool try_create_circle(const array_list<printer_point>& points, const double max_radius, const double min_radius, const double resolutino_mm, const double xyz_tolerance, bool allow_3d_arcs, circle& new_circle);
 
 	double get_polar_radians(const point& p1) const;
 
@@ -175,8 +176,9 @@ struct arc : circle
 	static bool try_create_arc(
 		const array_list<printer_point>& points, 
 		arc& target_arc, 
-		double approximate_length, 
+		double approximate_length,
 		double max_radius = DEFAULT_MAX_RADIUS_MM,
+		double min_radius = DEFAULT_MIN_RADIUS_MM,
 		double resolution = DEFAULT_RESOLUTION_MM, 
 		double path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
 		int min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,

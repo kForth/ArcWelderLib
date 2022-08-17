@@ -153,7 +153,7 @@ double vector::cross_product_magnitude(vector v1, vector v2)
 
 #pragma region Circle Functions
 
-bool circle::try_create_circle(const point& p1, const point& p2, const point& p3, const double max_radius, circle& new_circle)
+bool circle::try_create_circle(const point& p1, const point& p2, const point& p3, const double max_radius, const double min_radius, circle& new_circle)
 {
   if (point::is_near_collinear(p1,p2,p3, 0.001))
   {
@@ -184,7 +184,7 @@ bool circle::try_create_circle(const point& p1, const point& p2, const point& p3
   double y = -c / (2.0 * a);
 
   double radius = utilities::get_cartesian_distance(x, y, x1, y1);
-  if (radius > max_radius)
+  if (radius > max_radius || radius < min_radius)
     return false;
 
   new_circle.center.x = x;
@@ -195,7 +195,7 @@ bool circle::try_create_circle(const point& p1, const point& p2, const point& p3
   return true;
 }
 
-bool circle::try_create_circle(const array_list<printer_point>& points, const double max_radius, const double resolution_mm, const double xyz_tolerance, bool allow_3d_arcs, circle& new_circle)
+bool circle::try_create_circle(const array_list<printer_point>& points, const double max_radius, const double min_radius, const double resolution_mm, const double xyz_tolerance, bool allow_3d_arcs, circle& new_circle)
 {
   int count = points.count();
   int middle_index = count / 2;
@@ -203,7 +203,7 @@ bool circle::try_create_circle(const array_list<printer_point>& points, const do
   
 
   
-  if (circle::try_create_circle(points[0], points[middle_index], points[end_index], max_radius, new_circle) && !new_circle.is_over_deviation(points, resolution_mm, xyz_tolerance, allow_3d_arcs))
+  if (circle::try_create_circle(points[0], points[middle_index], points[end_index], max_radius, min_radius, new_circle) && !new_circle.is_over_deviation(points, resolution_mm, xyz_tolerance, allow_3d_arcs))
   {
     return true;
   }
@@ -215,7 +215,7 @@ bool circle::try_create_circle(const array_list<printer_point>& points, const do
   {
     middle_index = count / 3;
     end_index = middle_index + middle_index;
-    if (circle::try_create_circle(points[0], points[middle_index], points[end_index], max_radius, test_circle) && !test_circle.is_over_deviation(points, resolution_mm, xyz_tolerance, allow_3d_arcs))
+    if (circle::try_create_circle(points[0], points[middle_index], points[end_index], max_radius, min_radius, test_circle) && !test_circle.is_over_deviation(points, resolution_mm, xyz_tolerance, allow_3d_arcs))
     {
       new_circle = test_circle;
       return true;
@@ -242,7 +242,7 @@ bool circle::try_create_circle(const array_list<printer_point>& points, const do
     }
     circle test_circle;
     double current_deviation;
-    if (circle::try_create_circle(points[0], points[index], points[count - 1], max_radius, test_circle) && test_circle.get_deviation_sum_squared(points, resolution_mm, xyz_tolerance, allow_3d_arcs, current_deviation))
+    if (circle::try_create_circle(points[0], points[index], points[count - 1], max_radius, min_radius, test_circle) && test_circle.get_deviation_sum_squared(points, resolution_mm, xyz_tolerance, allow_3d_arcs, current_deviation))
     {
       
       if (!found_circle || current_deviation < least_deviation)
@@ -512,6 +512,7 @@ bool arc::try_create_arc(
   arc& target_arc,
   double approximate_length,
   double max_radius_mm,
+  double min_radius_mm,
   double resolution_mm,
   double path_tolerance_percent,
   int min_arc_segments,
@@ -521,7 +522,7 @@ bool arc::try_create_arc(
 {
   circle test_circle = (circle)target_arc;
 
-  if (!circle::try_create_circle(points, max_radius_mm, resolution_mm, xyz_tolerance, allow_3d_arcs, test_circle))
+  if (!circle::try_create_circle(points, max_radius_mm, min_radius_mm, resolution_mm, xyz_tolerance, allow_3d_arcs, test_circle))
   {
     return false;
   }

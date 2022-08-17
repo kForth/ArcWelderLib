@@ -589,6 +589,7 @@ struct arc_welder_args
 		double resolution_mm;
 		double path_tolerance_percent;
 		double max_radius_mm;
+		double min_radius_mm;
 		int min_arc_segments;
 		double mm_per_arc_segment;
 		bool g90_g91_influences_extruder;
@@ -626,6 +627,7 @@ struct arc_welder_args
 			stream << "\tResolution                   : " << resolution_mm << "mm (+-" << std::setprecision(5) << resolution_mm / 2.0 << "mm)\n";
 			stream << "\tPath Tolerance               : " << std::setprecision(3) << path_tolerance_percent * 100.0 << "%\n";
 			stream << "\tMaximum Arc Radius           : " << std::setprecision(1) << max_radius_mm << "mm\n";
+			stream << "\tMinimum Arc Radius           : " << std::setprecision(1) << min_radius_mm << "mm\n";
 			bool firmware_compensation_enabled = min_arc_segments > 0 && mm_per_arc_segment > 0.0;
 			stream << "\tFirmware Compensation        : " << (firmware_compensation_enabled ? "True" : "False") << "\n";
 			if (firmware_compensation_enabled)
@@ -673,6 +675,7 @@ private:
 			resolution_mm = DEFAULT_RESOLUTION_MM,
 			path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
 			max_radius_mm = DEFAULT_MAX_RADIUS_MM,
+			min_radius_mm = DEFAULT_MIN_RADIUS_MM,
 			min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,
 			mm_per_arc_segment = DEFAULT_MM_PER_ARC_SEGMENT,
 			g90_g91_influences_extruder = DEFAULT_G90_G91_INFLUENCES_EXTRUDER,

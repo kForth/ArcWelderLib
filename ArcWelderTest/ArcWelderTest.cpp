@@ -314,6 +314,7 @@ static void TestAntiStutter(std::string filePath)
 	args.allow_travel_arcs = true;
 	args.allow_3d_arcs = true;
 	args.max_radius_mm = 9999;
+	args.min_radius_mm = 0.1;
 	args.resolution_mm = 0.05;
 	args.extrusion_rate_variance_percent = 1000;
 	arc_welder arc_welder_obj(args);

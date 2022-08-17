@@ -33,6 +33,7 @@
 segmented_arc::segmented_arc() : segmented_shape(DEFAULT_MIN_SEGMENTS, DEFAULT_MAX_SEGMENTS, DEFAULT_RESOLUTION_MM, ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT)
 {
   max_radius_mm_ = DEFAULT_MAX_RADIUS_MM;
+  min_radius_mm_ = DEFAULT_MIN_RADIUS_MM;
   min_arc_segments_ = DEFAULT_MIN_ARC_SEGMENTS,
   mm_per_arc_segment_ = DEFAULT_MM_PER_ARC_SEGMENT;
   allow_3d_arcs_ = DEFAULT_ALLOW_3D_ARCS;
@@ -48,6 +49,7 @@ segmented_arc::segmented_arc(
   double resolution_mm,
   double path_tolerance_percent,
   double max_radius_mm,
+  double min_radius_mm,
   int min_arc_segments,
   double mm_per_arc_segment,
   bool allow_3d_arcs,
@@ -59,6 +61,10 @@ segmented_arc::segmented_arc(
   max_radius_mm_ = max_radius_mm;
   if (max_radius_mm > DEFAULT_MAX_RADIUS_MM) {
     max_radius_mm_ = DEFAULT_MAX_RADIUS_MM;
+  }
+  min_radius_mm_ = min_radius_mm;
+  if (min_radius_mm < DEFAULT_MIN_RADIUS_MM) {
+    min_radius_mm_ = DEFAULT_MIN_RADIUS_MM;
   }
   mm_per_arc_segment_ = mm_per_arc_segment;
   if (mm_per_arc_segment_ < 0 || utilities::is_zero(mm_per_arc_segment_))
@@ -107,6 +113,11 @@ printer_point segmented_arc::pop_back(double e_relative)
 double segmented_arc::get_max_radius() const
 {
   return max_radius_mm_;
+}
+
+double segmented_arc::get_min_radius() const
+{
+  return min_radius_mm_;
 }
 
 int segmented_arc::get_min_arc_segments() const
@@ -229,7 +240,7 @@ bool segmented_arc::try_add_point_internal_(printer_point p)
   double previous_shape_length = original_shape_length_;
   original_shape_length_ += p.distance;
   arc original_arc = current_arc_;
-  if (arc::try_create_arc(points_, current_arc_, original_shape_length_, max_radius_mm_, resolution_mm_, path_tolerance_percent_, min_arc_segments_, mm_per_arc_segment_, get_xyz_tolerance(), allow_3d_arcs_))
+  if (arc::try_create_arc(points_, current_arc_, original_shape_length_, max_radius_mm_, min_radius_mm_, resolution_mm_, path_tolerance_percent_, min_arc_segments_, mm_per_arc_segment_, get_xyz_tolerance(), allow_3d_arcs_))
   {
     bool abort_arc = false;
     if (max_gcode_length_ > 0 && get_shape_gcode_length() > max_gcode_length_)

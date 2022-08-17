@@ -92,6 +92,12 @@ int main(int argc, char* argv[])
   arg_description_stream << "The maximum radius of any arc in mm. Restrictions: Only values greater than 0.0 are allowed. Default Value: " << DEFAULT_MAX_RADIUS_MM;
   TCLAP::ValueArg<double> max_radius_arg("m", "max-radius-mm", arg_description_stream.str(), false, DEFAULT_MAX_RADIUS_MM, "float");
 
+  // -n --min-radius-mm
+  arg_description_stream.clear();
+  arg_description_stream.str("");
+  arg_description_stream << "The minimum radius of any arc in mm. Restrictions: Only values greater than 0.0 are allowed. Default Value: " << DEFAULT_MIN_RADIUS_MM;
+  TCLAP::ValueArg<double> min_radius_arg("n", "min-radius-mm", arg_description_stream.str(), false, DEFAULT_MIN_RADIUS_MM, "float");
+
   // -z --allow-3d-arcs
   arg_description_stream.clear();
   arg_description_stream.str("");
@@ -180,6 +186,7 @@ int main(int argc, char* argv[])
   cmd.add(resolution_arg);
   cmd.add(path_tolerance_percent_arg);
   cmd.add(max_radius_arg);
+  cmd.add(min_radius_arg);
   cmd.add(min_arc_segments_arg);
   cmd.add(mm_per_arc_segment_arg);
   cmd.add(allow_3d_arcs_arg);
@@ -209,6 +216,7 @@ int main(int argc, char* argv[])
 
     args.resolution_mm = resolution_arg.getValue();
     args.max_radius_mm = max_radius_arg.getValue();
+    args.min_radius_mm = min_radius_arg.getValue();
     args.min_arc_segments = min_arc_segments_arg.getValue();
     args.mm_per_arc_segment = mm_per_arc_segment_arg.getValue();
     args.path_tolerance_percent = path_tolerance_percent_arg.getValue();
@@ -300,19 +308,29 @@ int main(int argc, char* argv[])
     }
     if (args.max_radius_mm <= 0)
     {
-        throw TCLAP::ArgException("The provided value is less than or equal to 0.", max_radius_arg.toString());
+      throw TCLAP::ArgException("The provided value is less than or equal to 0.", max_radius_arg.toString());
+    }
+    if (args.min_radius_mm <= 0)
+    {
+      throw TCLAP::ArgException("The provided value is less than or equal to 0.", min_radius_arg.toString());
     }
 
     if (args.extrusion_rate_variance_percent == 0)
     {
         // warning
-        std::cout << "warning: The provided path max radius of " << args.max_radius_mm << "mm is greater than 1000000 (1km), which is not recommended.\n";
+        std::cout << "warning: The provided extrusion rate variance percent is equal to 0, which is not recommended.\n";
     }
 
     if (args.max_radius_mm > 1000000)
     {
-        // warning
-        std::cout << "warning: The provided path max radius of " << args.max_radius_mm << "mm is greater than 1000000 (1km), which is not recommended.\n";
+      // warning
+      std::cout << "warning: The provided path max radius of " << args.max_radius_mm << "mm is greater than 1000000 (1km), which is not recommended.\n";
+    }
+
+    if (args.min_radius_mm > 1000000)
+    {
+      // warning
+      std::cout << "warning: The provided path min radius of " << args.min_radius_mm << "mm is greater than 1000000 (1km), which is not recommended.\n";
     }
 
     if (args.path_tolerance_percent > 0.25)

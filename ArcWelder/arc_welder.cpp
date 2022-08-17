@@ -45,6 +45,7 @@ arc_welder::arc_welder(arc_welder_args args) : current_arc_(
         args.resolution_mm,
         args.path_tolerance_percent,
         args.max_radius_mm,
+        args.min_radius_mm,
         args.min_arc_segments,
         args.mm_per_arc_segment,
         args.allow_3d_arcs,
@@ -960,6 +961,7 @@ void arc_welder::add_arcwelder_comment_to_target()
   stream << "; resolution=" << std::setprecision(2) << resolution_mm_ << "mm\n";
   stream << "; path_tolerance=" << std::setprecision(1) << (current_arc_.get_path_tolerance_percent() * 100.0) << "%\n";
   stream << "; max_radius=" << std::setprecision(2) << (current_arc_.get_max_radius()) << "mm\n";
+  stream << "; min_radius=" << std::setprecision(2) << (current_arc_.get_min_radius()) << "mm\n";
   if (gcode_position_args_.g90_influences_extruder)
   {
     stream << "; g90_influences_extruder=True\n";

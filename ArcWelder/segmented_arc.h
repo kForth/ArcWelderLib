@@ -36,8 +36,9 @@ public:
 		int min_segments = DEFAULT_MIN_SEGMENTS, 
 		int max_segments = DEFAULT_MAX_SEGMENTS, 
 		double resolution_mm = DEFAULT_RESOLUTION_MM, 
-		double path_tolerance_percnet = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT, 
+		double path_tolerance_percnet = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
 		double max_radius_mm = DEFAULT_MAX_RADIUS_MM,
+		double min_radius_mm = DEFAULT_MIN_RADIUS_MM,
 		int min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,
 		double mm_per_arc_segment = DEFAULT_MM_PER_ARC_SEGMENT,
 		bool allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS,
@@ -54,6 +55,7 @@ public:
 	printer_point pop_front(double e_relative);
 	printer_point pop_back(double e_relative);
 	double get_max_radius() const;
+	double get_min_radius() const;
 	int get_min_arc_segments() const;
 	double get_mm_per_arc_segment() const;
 	int get_num_firmware_compensations() const;
@@ -62,6 +64,7 @@ private:
 	bool try_add_point_internal_(printer_point p);
 	arc current_arc_;
 	double max_radius_mm_;
+	double min_radius_mm_;
 	int min_arc_segments_;
 	double mm_per_arc_segment_;
 	int num_firmware_compensations_;
