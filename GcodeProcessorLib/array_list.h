@@ -183,6 +183,16 @@ public:
 		count_ = source.count_;
 	}
 
+	const array_list<T> slice(int startIndex, int endIndex) const
+	{
+		array_list<T> slice = array_list();
+		for (int index = startIndex; index < endIndex && index < count_; index++)
+		{
+			slice.push_back(items_[index]);
+		}
+		return slice;
+	}
+
 protected:
 	T* items_;
 	int  max_size_;

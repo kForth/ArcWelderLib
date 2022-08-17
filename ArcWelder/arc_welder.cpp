@@ -35,22 +35,32 @@
 #include <iomanip>
 #include <sstream>
 #include <version.h>
+#include <regex>
 
 
-
-
-arc_welder::arc_welder(arc_welder_args args) : current_arc_(
+arc_welder::arc_welder(arc_welder_args args) : 
+  current_arc_(
+        args.allow_3d_arcs,
         DEFAULT_MIN_SEGMENTS,
         args.buffer_size,
+        args.mm_per_segment,
         args.resolution_mm,
         args.path_tolerance_percent,
-        args.max_radius_mm,
-        args.min_arc_segments,
-        args.mm_per_arc_segment,
-        args.allow_3d_arcs,
+        args.max_gcode_length,
         args.default_xyz_precision,
         args.default_e_precision,
-        args.max_gcode_length
+        args.max_radius_mm
+    ),
+    current_spline_(
+        args.allow_3d_splines,
+        DEFAULT_MIN_SEGMENTS,
+        args.buffer_size,
+        args.mm_per_segment,
+        args.resolution_mm,
+        args.path_tolerance_percent,
+        args.max_gcode_length,
+        args.default_xyz_precision,
+        args.default_e_precision
     ),
     segment_statistics_(
         segment_statistic_lengths,
@@ -82,7 +92,9 @@ arc_welder::arc_welder(arc_welder_args args) : current_arc_(
     target_path_ = args.target_path;
     gcode_position_args_ = get_args_(args.g90_g91_influences_extruder, args.buffer_size);
     allow_3d_arcs_ = args.allow_3d_arcs;
+    allow_g5_splines_ = args.allow_g5_splines;
     allow_travel_arcs_ = args.allow_travel_arcs;
+    allow_travel_splines_ = args.allow_travel_splines;
     allow_dynamic_precision_ = args.allow_dynamic_precision;
     extrusion_rate_variance_percent_ = args.extrusion_rate_variance_percent;
     lines_processed_ = 0;
@@ -93,7 +105,9 @@ arc_welder::arc_welder(arc_welder_args args) : current_arc_(
     points_compressed_ = 0;
     arcs_created_ = 0;
     arcs_aborted_by_flow_rate_ = 0;
-    waiting_for_arc_ = false;
+    splines_created_ = 0;
+    splines_aborted_by_flow_rate_ = 0;
+    waiting_for_shape_ = false;
     previous_feedrate_ = -1;
     gcode_position_args_.set_num_extruders(8);
     previous_extrusion_rate_ = 0;
@@ -167,7 +181,8 @@ void arc_welder::reset()
   file_size_ = 0;
   points_compressed_ = 0;
   arcs_created_ = 0;
-  waiting_for_arc_ = false;
+  splines_created_ = 0;
+  waiting_for_shape_ = false;
 }
 
 long arc_welder::get_file_size(const std::string& file_path)
@@ -335,7 +350,7 @@ arc_welder_results arc_welder::process()
     }
   }
 
-  if (current_arc_.is_shape() && waiting_for_arc_)
+  if ((current_arc_.is_shape() || current_spline_.is_shape()) && waiting_for_shape_)
   {
     p_logger_->log(logger_type_, log_levels::DEBUG, "Processing the final line.");
     process_gcode(cmd, true, false);
@@ -400,6 +415,8 @@ arc_welder_progress arc_welder::get_progress_(long source_file_position, double 
   progress.points_compressed = points_compressed_;
   progress.arcs_created = arcs_created_;
   progress.arcs_aborted_by_flow_rate = arcs_aborted_by_flow_rate_;
+  progress.splines_created = splines_created_;
+  progress.splines_aborted_by_flow_rate = splines_aborted_by_flow_rate_;
   progress.source_file_position = source_file_position;
   progress.target_file_size = static_cast<long>(output_file_.tellp());
   progress.source_file_size = file_size_;
@@ -419,6 +436,8 @@ arc_welder_progress arc_welder::get_progress_(long source_file_position, double 
   }
   progress.num_firmware_compensations = current_arc_.get_num_firmware_compensations();
   progress.num_gcode_length_exceptions = current_arc_.get_num_gcode_length_exceptions();
+  //progress.num_firmware_compensations = current_spline_.get_num_firmware_compensations();
+  //progress.num_gcode_length_exceptions = current_spline_.get_num_gcode_length_exceptions();
   progress.segment_statistics = segment_statistics_;
   progress.segment_retraction_statistics = segment_retraction_statistics_;
   progress.travel_statistics = travel_statistics_;
@@ -430,7 +449,6 @@ arc_welder_progress arc_welder::get_progress_(long source_file_position, double 
 int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess)
 {
 
-  
   // Update the position for the source gcode file
   p_source_position_->update(cmd, lines_processed_, gcodes_processed_, -1);
   position* p_cur_pos = p_source_position_->get_current_position_ptr();
@@ -439,21 +457,29 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
   extruder extruder_current = p_cur_pos->get_current_extruder();
   extruder previous_extruder = p_pre_pos->get_current_extruder();
 
-  // Determine if this is a G0, G1, G2 or G3
-  bool is_g0_g1 = cmd.command == "G0" || cmd.command == "G1";
-  bool is_g2_g3 = cmd.command == "G2" || cmd.command == "G3";
+  // Determine if this is a G0, G1, G2, G3, or G5
+  /*std::cout << "!!!" << cmd.command << "!!!" << std::endl;
+  std::smatch cmd_re;
+  std::regex_match(cmd.command, cmd_re, std::regex("^[Gg]0?(0|1|2|3|5)(.?(\\d+)\\s)"));
+  std::cout << cmd_re[0] << " : " << cmd_re[1] << std::endl;*/
+
+  bool is_g_cmd = cmd.command.length() > 1 && (cmd.command.at(0) == 'G' || cmd.command.at(0) == 'g');
+  bool is_g0_g1 = is_g_cmd && (cmd.command.at(1) == '0' || cmd.command.at(1) == '1');
+  bool is_g2_g3 = is_g_cmd && (cmd.command.at(1) == '2' || cmd.command.at(1) == '3');
+  bool is_g5    = is_g_cmd && (cmd.command.at(1) == '5');
   //std::cout << lines_processed_ << " - " << cmd.gcode << ", CurrentEAbsolute: " << cur_extruder.e <<", ExtrusionLength: " << cur_extruder.extrusion_length << ", Retraction Length: " << cur_extruder.retraction_length << ", IsExtruding: " << cur_extruder.is_extruding << ", IsRetracting: " << cur_extruder.is_retracting << ".\n";
 
   int lines_written = 0;
   // see if this point is an extrusion
 
   bool arc_added = false;
+  bool spline_added = false;
   bool clear_shapes = false;
   double movement_length_mm = 0;
   bool is_extrusion = extruder_current.e_relative > 0;
   bool is_retraction = extruder_current.e_relative < 0;
-  bool is_travel = !(is_extrusion || is_retraction) && (is_g0_g1 || is_g2_g3);
-  
+  bool is_travel = !(is_extrusion || is_retraction) && (is_g0_g1 || is_g2_g3 || is_g5);
+    
   // Update the source file statistics
   if (p_cur_pos->has_xy_position_changed)
   {
@@ -492,11 +518,44 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
       movement_length_mm = utilities::get_arc_distance(p_pre_pos->x, p_pre_pos->y, p_pre_pos->z, p_cur_pos->x, p_cur_pos->y, p_cur_pos->z, i, j, r, p_cur_pos->command.command == "G2");
 
     }
-    else if (allow_3d_arcs_) {
-      movement_length_mm = utilities::get_cartesian_distance(p_pre_pos->x, p_pre_pos->y, p_pre_pos->z, p_cur_pos->x, p_cur_pos->y, p_cur_pos->z);
+    // Same as above but for g5 commands
+    else if (is_g5)
+    {
+      // Determine the offsets of the spline control points
+      double i = 0;
+      double j = 0;
+      double p = 0;
+      double q = 0;
+      // Iterate through the parameters and fill in I, J, P and Q;
+      for (std::vector<parsed_command_parameter>::iterator it = cmd.parameters.begin(); it != cmd.parameters.end(); ++it)
+      {
+        switch ((*it).name[0])
+        {
+        case 'I':
+          i = (*it).double_precision;
+          break;
+        case 'J':
+          j = (*it).double_precision;
+          break;
+        case 'P':
+          p = (*it).double_precision;
+          break;
+        case 'Q':
+          q = (*it).double_precision;
+          break;
+        }
+      }
+
+      movement_length_mm = utilities::get_spline_distance(p_pre_pos->x, p_pre_pos->y, p_pre_pos->z, p_cur_pos->x, p_cur_pos->y, p_cur_pos->z, i, j, p, q);
+
     }
     else {
-      movement_length_mm = utilities::get_cartesian_distance(p_pre_pos->x, p_pre_pos->y, p_cur_pos->x, p_cur_pos->y);
+      if (allow_3d_arcs_) {
+        movement_length_mm = utilities::get_cartesian_distance(p_pre_pos->x, p_pre_pos->y, p_pre_pos->z, p_cur_pos->x, p_cur_pos->y, p_cur_pos->z);
+      }
+      else {
+        movement_length_mm = utilities::get_cartesian_distance(p_pre_pos->x, p_pre_pos->y, p_cur_pos->x, p_cur_pos->y);
+      }
     }
 
     if (movement_length_mm > 0)
@@ -511,11 +570,10 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
         {
             segment_retraction_statistics_.update(movement_length_mm, true);
         }
-        else if (allow_travel_arcs_ && is_travel)
+        else if (is_travel && ((is_g2_g3 && allow_travel_arcs_) || (is_g5 && allow_travel_splines_)))
         {
-          travel_statistics_.update(movement_length_mm, true);
+            travel_statistics_.update(movement_length_mm, true);
         }
-
       }
     }
   }
@@ -556,9 +614,11 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
       case 'Y':
       case 'Z':
         current_arc_.update_xyz_precision((*it).double_precision);
+        current_spline_.update_xyz_precision((*it).double_precision);
         break;
       case 'E':
         current_arc_.update_e_precision((*it).double_precision);
+        current_spline_.update_e_precision((*it).double_precision);
         break;
       }
     }
@@ -579,26 +639,26 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
       (previous_extrusion_rate_ == 0 || utilities::less_than_or_equal(extrusion_rate_change_percent, extrusion_rate_variance_percent_)) &&
       !p_cur_pos->is_relative &&
       (
-        !waiting_for_arc_ ||
+        !waiting_for_shape_ ||
         extruder_current.is_extruding ||
         extruder_current.is_retracting ||
         // Test for travel conversion
-        (allow_travel_arcs_ && p_cur_pos->is_travel())
+        ((allow_travel_arcs_ || allow_travel_splines_) && p_cur_pos->is_travel())
         //|| (previous_extruder.is_extruding && extruder_current.is_extruding) // Test to see if 
         // we can get more arcs.
         // || (previous_extruder.is_retracting && extruder_current.is_retracting) // Test to see if 
         // we can get more arcs.
-        ) &&
+      ) &&
       p_cur_pos->is_extruder_relative == is_previous_extruder_relative &&
-      (!waiting_for_arc_ || p_pre_pos->f == p_cur_pos->f) && // might need to skip the waiting for arc check...
-      (!waiting_for_arc_ || p_pre_pos->feature_type_tag == p_cur_pos->feature_type_tag)
-      )
-    ) {
+      (!waiting_for_shape_ || p_pre_pos->f == p_cur_pos->f) && // might need to skip the waiting for arc/spline check...
+      (!waiting_for_shape_ || p_pre_pos->feature_type_tag == p_cur_pos->feature_type_tag)
+    )
+  ) {
 
     // Record the extrusion rate
     previous_extrusion_rate_ = mm_extruded_per_mm_travel;
     printer_point p(p_cur_pos->get_gcode_x(), p_cur_pos->get_gcode_y(), p_cur_pos->get_gcode_z(), extruder_current.get_offset_e(), extruder_current.e_relative, p_cur_pos->f, movement_length_mm, p_pre_pos->is_extruder_relative);
-    if (!waiting_for_arc_)
+    if (!waiting_for_shape_)
     {
       if (debug_logging_enabled_)
       {
@@ -611,38 +671,46 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
       //std::cout << "Trying to add first point (" << p.x << "," << p.y << "," << p.z << ")...";
 
       current_arc_.try_add_point(previous_p);
+      current_spline_.try_add_point(previous_p);
+      
     }
 
     double e_relative = extruder_current.e_relative;
-    int num_points = current_arc_.get_num_segments();
+    int arc_points = current_arc_.get_num_segments();
+    int spline_points = current_spline_.get_num_segments();
     arc_added = current_arc_.try_add_point(p);
-    if (arc_added)
+    spline_added = current_spline_.try_add_point(p);
+    if (arc_added || spline_added)
     {
       // Make sure our position list is large enough to handle all the segments
-      if (current_arc_.get_num_segments() + 2 > p_source_position_->get_max_positions())
-      {
+      if (
+        current_arc_.get_num_segments() + 2 > p_source_position_->get_max_positions()
+        || current_spline_.get_num_segments() + 2 > p_source_position_->get_max_positions()
+       ) {
         p_source_position_->grow_max_positions(p_source_position_->get_max_positions() * 2);
       }
-      if (!waiting_for_arc_)
+      if (!waiting_for_shape_)
       {
-        waiting_for_arc_ = true;
+        waiting_for_shape_ = true;
         previous_feedrate_ = p_pre_pos->f;
       }
       else
       {
         if (debug_logging_enabled_)
         {
-          if (num_points + 1 == current_arc_.get_num_segments())
+          if (arc_added && arc_points + 1 == current_arc_.get_num_segments())
           {
             p_logger_->log(logger_type_, log_levels::DEBUG, "Adding point to arc from Gcode:" + cmd.gcode);
           }
-
+          if (spline_added && spline_points + 1 == current_spline_.get_num_segments())
+          {
+            p_logger_->log(logger_type_, log_levels::DEBUG, "Adding point to spline from Gcode:" + cmd.gcode);
+          }
         }
       }
     }
   }
   else {
-
     if (debug_logging_enabled_) {
       if (is_end)
       {
@@ -667,7 +735,7 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
           p_logger_->log(logger_type_, log_levels::DEBUG, "XYZ Axis is in relative mode, cannot convert:" + cmd.gcode);
         }
         else if (
-          waiting_for_arc_ && !(
+          waiting_for_shape_ && !(
             (previous_extruder.is_extruding && extruder_current.is_extruding) ||
             (previous_extruder.is_retracting && extruder_current.is_retracting)
             )
@@ -707,11 +775,11 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
         {
           p_logger_->log(logger_type_, log_levels::DEBUG, "Extruder axis mode changed, cannot add point to current arc: " + cmd.gcode);
         }
-        else if (waiting_for_arc_ && p_pre_pos->f != p_cur_pos->f)
+        else if (waiting_for_shape_ && p_pre_pos->f != p_cur_pos->f)
         {
           p_logger_->log(logger_type_, log_levels::DEBUG, "Feedrate changed, cannot add point to current arc: " + cmd.gcode);
         }
-        else if (waiting_for_arc_ && p_pre_pos->feature_type_tag != p_cur_pos->feature_type_tag)
+        else if (waiting_for_shape_ && p_pre_pos->feature_type_tag != p_cur_pos->feature_type_tag)
         {
           p_logger_->log(logger_type_, log_levels::DEBUG, "Feature type changed, cannot add point to current arc: " + cmd.gcode);
         }
@@ -734,32 +802,65 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
     previous_extrusion_rate_ = 0;
   }
 
-  if (!arc_added && !(cmd.is_empty && cmd.comment.length() == 0))
+  if ((!arc_added || !spline_added) && !(cmd.is_empty && cmd.comment.length() == 0))
   {
-    if (current_arc_.get_num_segments() < current_arc_.get_min_segments()) {
-      if (debug_logging_enabled_ && !cmd.is_empty)
-      {
-        if (current_arc_.get_num_segments() != 0)
+    if (!arc_added) {
+      if (current_arc_.get_num_segments() < current_arc_.get_min_segments()) {
+        if (debug_logging_enabled_ && !cmd.is_empty)
         {
-          p_logger_->log(logger_type_, log_levels::DEBUG, "Not enough segments, resetting. Gcode:" + cmd.gcode);
+          if (current_arc_.get_num_segments() != 0)
+          {
+            p_logger_->log(logger_type_, log_levels::DEBUG, "Not enough arc segments, resetting. Gcode:" + cmd.gcode);
+          }
+        }
+        waiting_for_shape_ = false;
+        current_arc_.clear();
+      }
+    }
+    else if (!spline_added)
+    {
+      if (current_spline_.get_num_segments() < current_spline_.get_min_segments()) {
+        if (debug_logging_enabled_ && !cmd.is_empty)
+        {
+          if (current_spline_.get_num_segments() != 0)
+          {
+            p_logger_->log(logger_type_, log_levels::DEBUG, "Not enough spline segments, resetting. Gcode:" + cmd.gcode);
+          }
+        }
+        waiting_for_shape_ = false;
+        current_spline_.clear();
+      }
+    }
+    else if (waiting_for_shape_)
+    {
+      if (current_arc_.is_shape() || current_spline_.is_shape())
+      {
+        segmented_shape* added_shape;
+        // update our statistics
+        if (current_arc_.is_shape() && current_spline_.is_shape()) {
+          // TODO: Evaluate and pick the (best fitting/most compressed/?)
+          added_shape = &current_spline_;
+        }
+        else if (current_arc_.is_shape()) {
+          added_shape = &current_arc_;
+        }
+        else { // current_spline_.is_shape()
+          added_shape = &current_spline_;
         }
 
-      }
-      waiting_for_arc_ = false;
-      current_arc_.clear();
-    }
-    else if (waiting_for_arc_)
-    {
+        points_compressed_ += added_shape->get_num_segments() - 1;
+        if(added_shape == &current_arc_) {
+          arcs_created_++; // increment the number of generated arcs
+        }
+        else { // added_shape == &current_spline_
+          splines_created_++; // increment the number of generated splines
+        }
+        write_gcodes(p_pre_pos->f, added_shape);
 
-      if (current_arc_.is_shape())
-      {
-        // update our statistics
-        points_compressed_ += current_arc_.get_num_segments() - 1;
-        arcs_created_++; // increment the number of generated arcs
-        write_arc_gcodes(p_pre_pos->f);
         // Now clear the arc and flag the processor as not waiting for an arc
-        waiting_for_arc_ = false;
+        waiting_for_shape_ = false;
         current_arc_.clear();
+        current_spline_.clear();
         p_cur_pos = NULL;
         p_pre_pos = NULL;
 
@@ -785,7 +886,8 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
           p_logger_->log(logger_type_, log_levels::DEBUG, "The current arc is not a valid arc, resetting.");
         }
         current_arc_.clear();
-        waiting_for_arc_ = false;
+        current_spline_.clear();
+        waiting_for_shape_ = false;
       }
     }
     else if (debug_logging_enabled_)
@@ -795,29 +897,30 @@ int arc_welder::process_gcode(parsed_command cmd, bool is_end, bool is_reprocess
 
   }
 
-  if (waiting_for_arc_ || !arc_added)
+  if (waiting_for_shape_ || !arc_added)
   {
     // This might not work....
     //position* cur_pos = p_source_position_->get_current_position_ptr();
     unwritten_commands_.push_back(unwritten_command(cmd, is_previous_extruder_relative, is_extrusion, is_retraction, is_travel, movement_length_mm));
 
   }
-  else if (!waiting_for_arc_)
+  else if (!waiting_for_shape_)
   {
     write_unwritten_gcodes_to_file();
     current_arc_.clear();
+    current_spline_.clear();
   }
   return lines_written;
 }
 
-void arc_welder::write_arc_gcodes(double current_feedrate)
+void arc_welder::write_gcodes(double current_feedrate, segmented_shape* added_shape)
 {
 
-  std::string comment = get_comment_for_arc();
+  std::string comment = get_gcode_comment(added_shape);
   // remove the same number of unwritten gcodes as there are arc segments, minus 1 for the start point
   // Which isn't a movement
   // note, skip the first point, it is the starting point
-  int num_segments = current_arc_.get_num_segments() - 1;
+  int num_segments = added_shape->get_num_segments() - 1;
   for (int index = 0; index < num_segments; index++)
   {
     while (!unwritten_commands_.pop_back().is_g0_g1);
@@ -832,13 +935,14 @@ void arc_welder::write_arc_gcodes(double current_feedrate)
   }
 
   // Craete the arc gcode
-  std::string gcode = get_arc_gcode(comment);
+  std::string gcode = get_gcode(comment, added_shape);
 
   if (debug_logging_enabled_)
   {
     char buffer[20];
-    std::string message = "Arc created with ";
-    sprintf(buffer, "%d", current_arc_.get_num_segments());
+    std::string message = added_shape->shape_name;
+    message += " created with " +
+      sprintf(buffer, "%d", added_shape->get_num_segments());
     message += buffer;
     message += " segments: ";
     message += gcode;
@@ -849,30 +953,33 @@ void arc_welder::write_arc_gcodes(double current_feedrate)
   write_unwritten_gcodes_to_file();
 
   // Update the current extrusion statistics for the current arc gcode
-  double shape_e_relative = current_arc_.get_shape_e_relative();
+  double shape_e_relative = added_shape->get_e_relative();
   bool is_retraction = shape_e_relative < 0;
   bool is_extrusion = shape_e_relative > 0;
   if (is_extrusion)
   {
-    segment_statistics_.update(current_arc_.get_shape_length(), false);
+    segment_statistics_.update(added_shape->get_length(), false);
 
   }
   else if (is_retraction)
   {
-      segment_retraction_statistics_.update(current_arc_.get_shape_length(), false);
+    segment_retraction_statistics_.update(added_shape->get_length(), false);
   }
-  else if (allow_travel_arcs_ ) {
-    travel_statistics_.update(current_arc_.get_shape_length(), false);
+  else if (added_shape == &current_arc_ && allow_travel_arcs_) {
+    travel_statistics_.update(current_arc_.get_length(), false);
+  }
+  else if (added_shape == &current_spline_ && allow_travel_splines_) {
+    travel_statistics_.update(current_spline_.get_length(), false);
   }
   // now write the current arc to the file 
   write_gcode_to_file(gcode);
 }
 
-std::string arc_welder::get_comment_for_arc()
+std::string arc_welder::get_gcode_comment(segmented_shape* added_shape)
 {
   // build a comment string from the commands making up the arc
         // We need to start with the first command entered.
-  int comment_index = unwritten_commands_.count() - (current_arc_.get_num_segments() - 1);
+  int comment_index = unwritten_commands_.count() - (added_shape->get_num_segments() - 1);
   std::string comment;
   for (; comment_index < unwritten_commands_.count(); comment_index++)
   {
@@ -912,7 +1019,7 @@ int arc_welder::write_unwritten_gcodes_to_file()
   {
     // The the current unwritten position and remove it from the list
     unwritten_command p = unwritten_commands_.pop_front();
-    if ((p.is_g0_g1 || p.is_g2_g3) && p.length > 0)
+    if ((p.is_g0_g1 || p.is_g2_g3 || p.is_g5) && p.length > 0)
     {
 
       if (p.is_extrusion)
@@ -934,18 +1041,15 @@ int arc_welder::write_unwritten_gcodes_to_file()
   return size;
 }
 
-std::string arc_welder::get_arc_gcode(const std::string comment)
+std::string arc_welder::get_gcode(const std::string comment, segmented_shape* added_shape)
 {
-  // Write gcode to file
-  std::string gcode;
+     std::string gcode = added_shape->get_gcode();
 
-  gcode = current_arc_.get_shape_gcode();
-
-  if (comment.length() > 0)
-  {
-    gcode += ";" + comment;
-  }
-  return gcode;
+    if (comment.length() > 0)
+    {
+        gcode += "; " + comment;
+    }
+    return gcode;
 
 }
 
@@ -960,19 +1064,28 @@ void arc_welder::add_arcwelder_comment_to_target()
   stream << "; resolution=" << std::setprecision(2) << resolution_mm_ << "mm\n";
   stream << "; path_tolerance=" << std::setprecision(1) << (current_arc_.get_path_tolerance_percent() * 100.0) << "%\n";
   stream << "; max_radius=" << std::setprecision(2) << (current_arc_.get_max_radius()) << "mm\n";
+  // TODO: Report any spline parameters?
   if (gcode_position_args_.g90_influences_extruder)
   {
     stream << "; g90_influences_extruder=True\n";
   }
-  if (current_arc_.get_mm_per_arc_segment() > 0 && current_arc_.get_min_arc_segments() > 0)
+  if (current_arc_.get_mm_per_segment() > 0 && current_arc_.get_min_segments() > 0)
   {
     stream << "; firmware_compensation=True\n";
-    stream << "; mm_per_arc_segment=" << std::setprecision(2) << current_arc_.get_mm_per_arc_segment() << "mm\n";
-    stream << "; min_arc_segments=" << std::setprecision(0) << current_arc_.get_min_arc_segments() << "\n";
+    stream << "; mm_per_segment=" << std::setprecision(2) << current_arc_.get_mm_per_segment() << "mm\n";
+    stream << "; min_segments=" << std::setprecision(0) << current_arc_.get_min_segments() << "\n";
   }
   if (allow_3d_arcs_)
   {
     stream << "; allow_3d_arcs=True\n";
+  }
+  if (allow_g5_splines_)
+  {
+      stream << "; allow_g5_splines=True\n";
+  }
+  if (allow_3d_splines_)
+  {
+    stream << "; allow_3d_splines=True\n";
   }
   if (allow_travel_arcs_)
   {

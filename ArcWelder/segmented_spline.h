@@ -22,46 +22,36 @@
 // You can contact the author at the following email address: 
 // FormerLurker@pm.me
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #pragma once
-#include "parsed_command.h"
-#include "position.h"
-struct unwritten_command
+#include "segmented_shape.h"
+#define GCODE_CHAR_BUFFER_SIZE 1000
+
+class segmented_spline :
+	public segmented_shape
 {
-	unwritten_command() {
-		is_extruder_relative = false;
-		length = 0;
-		is_g0_g1 = false;
-		is_g2_g3 = false;
-		is_g5 = false;
-		is_travel = false;
-		is_extrusion = false;
-		is_retraction = false;
-		gcode = "";
-		comment = "";
-	}
-	unwritten_command(parsed_command &cmd, bool is_relative, bool is_extrusion, bool is_retraction, bool is_travel, double command_length) 
-		: is_extruder_relative(is_relative), is_extrusion(is_extrusion), is_retraction(is_retraction), is_travel(is_travel), is_g0_g1(cmd.command == "G0" || cmd.command == "G1"), is_g2_g3(cmd.command == "G2" || cmd.command == "G3"), is_g5(cmd.command == "G5"), gcode(cmd.gcode), comment(cmd.comment), length(command_length)
-	{
-
-	}
-	bool is_g0_g1;
-	bool is_g2_g3;
-	bool is_g5;
-	bool is_extruder_relative;
-	bool is_travel;
-	bool is_extrusion;
-	bool is_retraction;
-	double length;
-	std::string gcode;
-	std::string comment;
-
-	std::string to_string()
-	{
-		if (comment.size() > 0)
-		{
-			return gcode + ";" + comment;
-		}
-		return gcode;
-	}
+public:
+	segmented_spline();
+	segmented_spline(
+		bool allow_3d_shapes = DEFAULT_ALLOW_3D_SPLINES,
+		int min_segments = 5, //DEFAULT_MIN_SEGMENTS,
+		int max_segments = DEFAULT_MAX_SEGMENTS,
+		double mm_per_segment = DEFAULT_MM_PER_SEGMENT,
+		double resolution_mm = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		int max_gcode_length = DEFAULT_MAX_GCODE_LENGTH,
+		unsigned char default_xyz_precision = DEFAULT_XYZ_PRECISION,
+		unsigned char default_e_precision = DEFAULT_E_PRECISION
+	);
+	virtual ~segmented_spline();
+	virtual double get_length();
+	virtual std::string get_gcode() const;
+	virtual int get_gcode_length();
+	const std::string shape_name = "Spline";
+protected:
+	virtual bool try_add_point_internal_(printer_point p);
+private:
+	spline current_spline_;
+	// TODO: Other spline constraints?
 };
 

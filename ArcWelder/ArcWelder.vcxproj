@@ -230,6 +230,9 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Remote_Pi|x64'">
     <ClCompile>
@@ -296,12 +299,14 @@
     <ClInclude Include="arc_welder.h" />
     <ClInclude Include="segmented_arc.h" />
     <ClInclude Include="segmented_shape.h" />
+    <ClInclude Include="segmented_spline.h" />
     <ClInclude Include="unwritten_command.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="arc_welder.cpp" />
     <ClCompile Include="segmented_arc.cpp" />
     <ClCompile Include="segmented_shape.cpp" />
+    <ClCompile Include="segmented_spline.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="CMakeLists.txt" />

@@ -74,6 +74,9 @@ namespace utilities{
 	double get_cartesian_distance(double x1, double y1, double z1, double x2, double y2, double z2);
 
 	double get_arc_distance(double x1, double y1, double z1, double x2, double y2, double z2, double i, double j, double r, bool is_clockwise);
+
+	double get_spline_distance(double x1, double y1, double z1, double x2, double y2, double z2, double i, double j, double p, double q);
+
 	std::string to_string(double value);
 
 	std::string to_string(int value);

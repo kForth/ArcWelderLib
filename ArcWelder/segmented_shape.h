@@ -34,8 +34,15 @@
 #define DEFAULT_XYZ_PRECISION 3
 #define DEFAULT_XYZ_TOLERANCE 0.001
 #define DEFAULT_E_PRECISION 5
-#define ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT 0.05  // one percent
+#define LENGTH_PERCENT_TOLERANCE_DEFAULT 0.05  // one percent
 #define DEFAULT_MAX_GCODE_LENGTH 0 // the maximum gcode length ( < 1 = unlimited)
+
+#define DEFAULT_MIN_SEGMENTS 3
+#define DEFAULT_MAX_SEGMENTS 50
+#define DEFAULT_MM_PER_SEGMENT 0.01
+#define DEFAULT_RESOLUTION_MM 0.05
+#define DEFAULT_ALLOW_3D_SHAPES false
+
 struct point
 {
 public:
@@ -134,10 +141,7 @@ struct circle {
 	bool get_deviation_sum_squared(const array_list<printer_point>& points, const double resolution_mm, const double xyz_tolerance, const bool allow_3d_arcs, double& sum_deviation);
 };
 
-#define DEFAULT_RESOLUTION_MM 0.05
 #define DEFAULT_ALLOW_3D_ARCS false
-#define DEFAULT_MIN_ARC_SEGMENTS 0
-#define DEFAULT_MM_PER_ARC_SEGMENT 0
 enum DirectionEnum { UNKNOWN = 0, COUNTERCLOCKWISE = 1, CLOCKWISE = 2};
 struct arc : circle
 {
@@ -160,7 +164,7 @@ struct arc : circle
 		max_deviation = 0;
 		direction = DirectionEnum::UNKNOWN;
 	}
-	
+
 	bool is_arc;
 	double length;
 	double angle_radians;
@@ -173,42 +177,97 @@ struct arc : circle
 	double get_i() const;
 	double get_j() const;
 	static bool try_create_arc(
-		const array_list<printer_point>& points, 
-		arc& target_arc, 
-		double approximate_length, 
+		const array_list<printer_point>& points,
+		arc& target_arc,
+		double approximate_length,
 		double max_radius = DEFAULT_MAX_RADIUS_MM,
-		double resolution = DEFAULT_RESOLUTION_MM, 
-		double path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
-		int min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,
-		double mm_per_arc_segment = DEFAULT_MM_PER_ARC_SEGMENT,
+		double resolution = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
 		double xyz_tolerance = DEFAULT_XYZ_TOLERANCE,
 		bool allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS);
 	static bool are_points_within_slice(const arc& test_arc, const array_list<printer_point>& points);
 	static bool ray_intersects_segment(const point rayOrigin, const point rayDirection, const printer_point point1, const printer_point point2);
-	private:
-		static bool try_create_arc(
-			const circle& c,
-			const printer_point& start_point,
-			const printer_point& mid_point,
-			const printer_point& end_point,
-			arc& target_arc,
-			double approximate_length,
-			double resolution = DEFAULT_RESOLUTION_MM,
-			double path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
-			bool allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS);
+private:
+	static bool try_create_arc(
+		const circle& c,
+		const printer_point& start_point,
+		const printer_point& mid_point,
+		const printer_point& end_point,
+		arc& target_arc,
+		double approximate_length,
+		double resolution = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		bool allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS);
 };
 
-#define DEFAULT_MIN_SEGMENTS 3
-#define DEFAULT_MAX_SEGMENTS 50
+#define DEFAULT_ALLOW_G5_SPLINES false
+#define DEFAULT_ALLOW_3D_SPLINES false
+struct spline 
+{
+	spline() {
+		start_point.x = 0;
+		start_point.y = 0;
+		start_point.z = 0;
+		end_point.x = 0;
+		end_point.y = 0;
+		end_point.z = 0;
+		spline_points = new array_list<printer_point>();
+		control_points = new array_list<printer_point>();
+		is_spline = false;
+		length = 0;
+		max_deviation = 0;
+	}
+	~spline() {
+		free(&spline_points);
+		free(&control_points);
+		return;
+	}
+
+	bool is_spline;
+	double length;
+	double max_deviation;
+	printer_point start_point;
+	printer_point end_point;
+	array_list<printer_point>* spline_points;
+	array_list<printer_point>* control_points;
+	double get_i(int spline_index) const;
+	double get_j(int spline_index) const;
+	double get_p(int spline_index) const;
+	double get_q(int spline_index) const;
+	static bool try_create_spline(
+		array_list<printer_point>* points,
+		spline* target_spline,
+		double approximate_length,
+		double resolution = DEFAULT_MIN_SEGMENTS,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		int min_segments = DEFAULT_MIN_SEGMENTS,
+		double mm_per_segment = DEFAULT_MM_PER_SEGMENT,
+		double xyz_tolerance = DEFAULT_XYZ_TOLERANCE,
+		bool allow_3d_splines = DEFAULT_ALLOW_3D_SPLINES);
+	static bool are_points_within_slice(const spline* test_spline, const array_list<printer_point>* points);
+	static bool ray_intersects_segment(const point rayOrigin, const point rayDirection, const printer_point point1, const printer_point point2);
+private:
+	static bool try_create_spline(
+		array_list<printer_point>* spline_points,
+		spline* target_spline,
+		double approximate_length,
+		double resolution = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		bool allow_3d_splines = DEFAULT_ALLOW_3D_SPLINES);
+};
 
 class segmented_shape
 {
 public:
 	
-	segmented_shape(int min_segments = DEFAULT_MIN_SEGMENTS,
-		int max_segments = DEFAULT_MAX_SEGMENTS, 
-		double resolution_mm = DEFAULT_RESOLUTION_MM, 
-		double path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
+	segmented_shape(
+		bool allow_3d_shapes = DEFAULT_ALLOW_3D_SHAPES,
+		int min_segments = DEFAULT_MIN_SEGMENTS,
+		int max_segments = DEFAULT_MAX_SEGMENTS,
+		double mm_per_segment = DEFAULT_MM_PER_SEGMENT,
+		double resolution_mm = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		int max_gcode_length = DEFAULT_MAX_GCODE_LENGTH,
 		unsigned char default_xyz_precision = DEFAULT_XYZ_PRECISION,
 		unsigned char default_e_precision = DEFAULT_E_PRECISION
 	);
@@ -217,38 +276,54 @@ public:
 	int get_num_segments();
 	int get_min_segments();
 	int get_max_segments();
+	double get_mm_per_segment();
 	double get_resolution_mm();
 	double get_path_tolerance_percent();
-	virtual double get_shape_length();
-	double get_shape_e_relative();
+	double get_e_relative();
 	void set_resolution_mm(double resolution_mm);
 	void reset_precision();
 	void update_xyz_precision(unsigned char precision);
 	void update_e_precision(unsigned char precision);
 	virtual bool is_shape() const;
+	printer_point pop_front(double e_relative);
+	printer_point pop_back(double e_relative);
 	// public virtual functions
 	virtual void clear();
 	virtual printer_point pop_front();
 	virtual printer_point pop_back();
+	virtual bool try_add_point(printer_point p);
 	virtual bool try_add_point(printer_point p, double e_relative);
-	virtual std::string get_shape_gcode_absolute(double e_abs_start);
-	virtual std::string get_shape_gcode_relative();
+	virtual double get_length();
+	virtual std::string get_gcode() const;
+	virtual int get_gcode_length();
+	//bool is_shape() const;
+	virtual std::string get_gcode_absolute(double e_abs_start);
+	virtual std::string get_gcode_relative();
 	bool is_extruding();
 	unsigned char get_xyz_precision() const;
 	unsigned char get_e_precision() const;
 	double get_xyz_tolerance() const;
+	int get_num_firmware_compensations() const;
+	int get_num_gcode_length_exceptions() const;
+	const std::string shape_name;
 protected:
 	array_list<printer_point> points_;
 	void set_is_shape(bool value);
 	double original_shape_length_;	
 	double e_relative_;
 	bool is_extruding_;
+	bool allow_3d_shapes_;
+	int min_segments_;
+	int max_segments_;
+	int mm_per_segment_;
 	double resolution_mm_;
 	bool is_shape_;
 	double path_tolerance_percent_;
+	int max_gcode_length_;
+	int num_gcode_length_exceptions_;
+	int num_firmware_compensations_;
+	virtual bool try_add_point_internal_(printer_point p);
 private:
-	int min_segments_;
-	int max_segments_;
 	unsigned char xyz_precision_;
 	double xyz_tolerance_;
 	unsigned char e_precision_;

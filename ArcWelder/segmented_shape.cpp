@@ -28,6 +28,8 @@
 #include "utilities.h"
 #include <cmath>
 #include <iostream>
+#include "../bspline/BSpline/BSpline.h"
+
 #pragma region Operators for Vector and Point
 
 point operator +(point lhs, const vector rhs) {
@@ -514,8 +516,6 @@ bool arc::try_create_arc(
   double max_radius_mm,
   double resolution_mm,
   double path_tolerance_percent,
-  int min_arc_segments,
-  double mm_per_arc_segment,
   double xyz_tolerance,
   bool allow_3d_arcs)
 {
@@ -680,9 +680,195 @@ bool arc::ray_intersects_segment(const point rayOrigin, const point rayDirection
 
 #pragma endregion
 
-segmented_shape::segmented_shape(int min_segments, int max_segments, double resolution_mm, double path_tolerance_percnet, unsigned char default_xyz_precision, unsigned char default_e_precision) : points_(max_segments)
+#pragma region Spline Functions
+double spline::get_i(int spline_index) const
+{
+  int start_point_i = 0;
+  int end_point_i = start_point_i + 1;
+  int control_point_1_i = 1;
+  // TODO: Actually calculate this
+  return 1;
+}
+
+double spline::get_j(int spline_index) const
+{
+  // TODO: Actually calculate this
+  return 1;
+}
+
+double spline::get_p(int spline_index) const
+{
+  // TODO: Actually calculate this
+  return 1;
+}
+
+double spline::get_q(int spline_index) const
+{
+  // TODO: Actually calculate this
+  return 1;
+}
+
+bool spline::try_create_spline(
+  array_list<printer_point>* spline_points,
+  spline* target_spline,
+  double approximate_length,
+  double resolution,
+  double path_tolerance_percent,
+  bool allow_3d_splines
+)
+{
+  int n_points = spline_points->count();
+  printer_point start_point = (*spline_points)[0];
+  printer_point end_point = (*spline_points)[n_points - 1];
+
+  // TODO: Fit spline to all points and then break up later
+  /*double* x_points = new double[n_points];
+  double* y_points = new double[n_points];
+
+  for (int i = 0; i < n_points; i++) {
+    x_points[i] = spline_points[i].x;
+    y_points[i] = spline_points[i].y;
+  }
+
+  BSpline<double> bspline = BSpline<double>(x_points, n_points, y_points, 0);
+  if (bspline.ok()) {
+    std::cout << "Spline OK!";
+  }*/
+
+  // TODO: Get control points from fit curve
+  //array_list<double> control_point_x = array_list<double>();
+  //array_list<double> control_point_y = array_list<double>();
+
+  // TODO: Get length of spline
+  // Calculate the 2d spline length on the X/Y plane.
+  double spline_length = point::cartesian_distance(start_point, end_point);
+
+  if (allow_3d_splines)
+  {
+    // We may be traveling in 3 space, calculate the spline_length of the 3d spline
+    if (start_point.z != end_point.z)
+    {
+      spline_length = utilities::hypot(spline_length, end_point.z - start_point.z);
+    }
+  }
+
+  target_spline->start_point = start_point;
+  target_spline->end_point = end_point;
+  target_spline->spline_points = spline_points;
+  target_spline->length = spline_length;
+
+  return true;
+
+}
+
+bool spline::try_create_spline(
+  array_list<printer_point>* points,
+  spline* target_spline,
+  double approximate_length,
+  double resolution_mm,
+  double path_tolerance_percent,
+  int min_segments,
+  double mm_per_segment,
+  double xyz_tolerance,
+  bool allow_3d_splines)
 {
 
+  // We could save a bit of processing power and do our firmware compensation here, but we won't be able to track statistics for this easily.
+  // moved check to segmented_spline.cpp
+  spline* test_spline = new spline;
+  const int end_point_index = points->count() - 1;
+  if (!spline::try_create_spline(
+    points,
+    test_spline,
+    approximate_length,
+    resolution_mm,
+    path_tolerance_percent,
+    allow_3d_splines)
+  )
+  {
+    return false;
+  }
+
+  if (spline::are_points_within_slice(test_spline, points))
+  {
+    target_spline = test_spline;
+    std::cout << std::endl;
+    return true;
+  }
+  return false;
+}
+
+bool spline::are_points_within_slice(const spline* test_spline, const array_list<printer_point>* points)
+{
+  
+  // Loop through the points and see if they are on the spline path
+  const int point_count = points->count();
+
+  printer_point* spline_start_point = test_spline->spline_points[0];
+  printer_point* spline_end_point = test_spline->spline_points[test_spline->spline_points).count() - 1];
+
+  // Need to see if point 1 to point 2 cross zero
+  for (int index = point_count - 2; index < point_count; index++)
+  {
+    printer_point point = (*points)[index];
+
+    if (point.x == spline_start_point->x &&
+        point.y == spline_start_point->y &&
+        point.z == spline_start_point->z
+    ) {
+      return true;
+    }
+    if (point.x == spline_end_point->x &&
+        point.y == spline_end_point->y &&
+        point.z == spline_end_point->z
+    ) {
+      return true;
+    }
+
+    // TODO: Check if point is on the spline path
+    bool point_within_slice = false;
+    if (point_within_slice) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// return the distance of ray origin to intersection point
+bool spline::ray_intersects_segment(const point rayOrigin, const point rayDirection, const printer_point point1, const printer_point point2)
+{
+  vector v1 = rayOrigin - point1;
+  vector v2 = point2 - point1;
+  vector v3 = vector(-rayDirection.y, rayDirection.x, 0);
+
+  double dot = dot(v2, v3);
+  if (utilities::abs(dot) < 0.000001)
+    return false;
+
+  double t1 = vector::cross_product_magnitude(v2, v1) / dot;
+  double t2 = dot(v1, v3) / dot;
+
+  if (t1 >= 0.0 && (t2 >= 0.0 && t2 <= 1.0))
+    return true;
+
+  return false;
+}
+
+#pragma endregion
+
+segmented_shape::segmented_shape(
+  bool allow_3d_shapes,
+  int min_segments,
+  int max_segments,
+  double mm_per_segment,
+  double resolution_mm,
+  double path_tolerance_percnet,
+  int max_gcode_length,
+  unsigned char default_xyz_precision,
+  unsigned char default_e_precision
+) : points_(max_segments)
+{
   set_xyz_precision(default_xyz_precision);
   e_precision_ = default_e_precision;
   max_segments_ = max_segments;
@@ -690,9 +876,23 @@ segmented_shape::segmented_shape(int min_segments, int max_segments, double reso
   resolution_mm_ = resolution_mm / 2.0; // divide by 2 because it is + or - 1/2 of the desired resolution.
   e_relative_ = 0;
   is_shape_ = false;
-  // min segments can never be lower than 3 (the default) else there could be no compression.
-  if (min_segments < DEFAULT_MIN_SEGMENTS) min_segments_ = DEFAULT_MIN_SEGMENTS;
-  else min_segments_ = min_segments;
+
+  allow_3d_shapes_ = allow_3d_shapes;
+
+  min_segments_ = min_segments;
+  if (min_segments_ < 0)
+    min_segments_ = 0;
+
+  mm_per_segment_ = mm_per_segment;
+  if (mm_per_segment_ < 0 || utilities::is_zero(mm_per_segment_))
+    mm_per_segment = 0;
+
+  max_gcode_length_ = max_gcode_length;
+  if (max_gcode_length_ < 1)
+    max_gcode_length_ = 0;
+
+  num_firmware_compensations_ = 0;
+  num_gcode_length_exceptions_ = 0;
 
   original_shape_length_ = 0;
   is_extruding_ = true;
@@ -703,6 +903,25 @@ segmented_shape::~segmented_shape()
 
 }
 
+printer_point segmented_shape::pop_front(double e_relative)
+{
+  e_relative_ -= e_relative;
+  if (points_.count() == get_min_segments())
+  {
+    set_is_shape(false);
+  }
+  return points_.pop_front();
+}
+printer_point segmented_shape::pop_back(double e_relative)
+{
+  e_relative_ -= e_relative;
+  return points_.pop_back();
+  if (points_.count() == get_min_segments())
+  {
+    set_is_shape(false);
+  }
+}
+
 unsigned char segmented_shape::get_xyz_precision() const
 {
   return xyz_precision_;
@@ -711,6 +930,15 @@ unsigned char segmented_shape::get_xyz_precision() const
 double segmented_shape::get_xyz_tolerance() const
 {
   return xyz_tolerance_;
+}
+
+int segmented_shape::get_num_firmware_compensations() const
+{
+  return num_firmware_compensations_;
+}
+int segmented_shape::get_num_gcode_length_exceptions() const
+{
+  return num_gcode_length_exceptions_;
 }
 
 unsigned char segmented_shape::get_e_precision() const
@@ -781,12 +1009,12 @@ int segmented_shape::get_num_segments()
   return points_.count();
 }
 
-double segmented_shape::get_shape_length()
+double segmented_shape::get_length()
 {
   return original_shape_length_;
 }
 
-double segmented_shape::get_shape_e_relative()
+double segmented_shape::get_e_relative()
 {
   return e_relative_;
 }
@@ -812,9 +1040,15 @@ int segmented_shape::get_min_segments()
 {
   return min_segments_;
 }
+
 int segmented_shape::get_max_segments()
 {
   return max_segments_;
+}
+
+double segmented_shape::get_mm_per_segment()
+{
+  return mm_per_segment_;
 }
 
 double segmented_shape::get_resolution_mm()
@@ -832,6 +1066,7 @@ void segmented_shape::set_resolution_mm(double resolution_mm)
   resolution_mm_ = resolution_mm;
 
 }
+
 printer_point segmented_shape::pop_front()
 {
   return points_.pop_front();
@@ -846,12 +1081,110 @@ bool segmented_shape::try_add_point(printer_point p, double e_relative)
   throw std::exception();
 }
 
-std::string segmented_shape::get_shape_gcode_absolute(double e_abs_start)
+bool segmented_shape::try_add_point(printer_point p)
+{
+
+  bool point_added = false;
+  // if we don't have enough segnemts to check the shape, just add
+
+  if (points_.count() == points_.get_max_size())
+  {
+    // Too many points, we can't add more
+    points_.resize(points_.get_max_size() * 2);
+  }
+  if (points_.count() > 0)
+  {
+    printer_point p1 = points_[points_.count() - 1];
+    if (!allow_3d_shapes_ && !utilities::is_equal(p1.z, p.z))
+    {
+      // Z axis changes aren't allowed
+      return false;
+    }
+
+    // If we have more than 2 points, we need to make sure the current and previous moves are all of the same type.
+    if (points_.count() > 2)
+    {
+      // TODO:  Do we need this?
+      // We already have at least an initial point and a second point.  Make cure the current point and the previous are either both
+      // travel moves, or both extrusion
+      if (!(
+        (p1.e_relative > 0 && p.e_relative > 0) // Extrusions 
+        || (p1.e_relative < 0 && p.e_relative < 0) // Retractions
+        || (p1.e_relative == 0 && p.e_relative == 0) // Travel
+        )
+        )
+      {
+        return false;
+      }
+    }
+
+    if (utilities::is_zero(p.distance))
+    {
+      // there must be some distance between the points
+      // to make an spline.
+      return false;
+    }
+  }
+
+  if (points_.count() < get_min_segments() - 1)
+  {
+    point_added = true;
+    points_.push_back(p);
+    original_shape_length_ += p.distance;
+  }
+  else
+  {
+    // if we're here, we need to see if the new point can be included in the shape
+    point_added = try_add_point_internal_(p);
+  }
+  if (point_added)
+  {
+
+    if (points_.count() > 1)
+    {
+      // Only add the relative distance to the second point on up.
+      e_relative_ += p.e_relative;
+    }
+    //std::cout << " success - " << points_.count() << " points.\n";
+  }
+  else if (points_.count() < get_min_segments() && points_.count() > 1)
+  {
+    // If we haven't added a point, and we have exactly min_segments_,
+    // pull off the initial spline point and try again
+    points_.pop_front();
+    // Get the new initial point
+    printer_point new_initial_point = points_[0];
+    // The length and e_relative distance of the spline has been reduced 
+    // by removing the front point.  Calculate this.
+    original_shape_length_ -= new_initial_point.distance;
+    e_relative_ -= new_initial_point.e_relative;
+    return try_add_point(p);
+  }
+
+  return point_added;
+}
+
+bool segmented_shape::try_add_point_internal_(printer_point p)
 {
   throw std::exception();
 }
 
-std::string segmented_shape::get_shape_gcode_relative()
+std::string segmented_shape::get_gcode() const
+{
+  throw std::exception();
+}
+
+int segmented_shape::get_gcode_length()
+{
+  throw std::exception();
+}
+
+std::string segmented_shape::get_gcode_absolute(double e_abs_start)
+{
+  throw std::exception();
+}
+
+std::string segmented_shape::get_gcode_relative()
 {
   throw std::exception();
 }

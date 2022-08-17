@@ -199,6 +199,7 @@ private:
 	void process_g0_g1(position*, parsed_command&);
 	void process_g2(position*, parsed_command&);
 	void process_g3(position*, parsed_command&);
+	void process_g5(position*, parsed_command&);
 	void process_g10(position*, parsed_command&);
 	void process_g11(position*, parsed_command&);
 	void process_g20(position*, parsed_command&);

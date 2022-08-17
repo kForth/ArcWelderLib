@@ -31,6 +31,7 @@
 #include "position.h"
 #include "gcode_parser.h"
 #include "segmented_arc.h"
+#include "segmented_spline.h"
 #include <iostream>
 #include <fstream>
 #include "array_list.h"
@@ -463,6 +464,8 @@ struct arc_welder_progress {
 		points_compressed = 0;
 		arcs_created = 0;
 		arcs_aborted_by_flow_rate = 0;
+		splines_created = 0;
+		splines_aborted_by_flow_rate = 0;
 		num_firmware_compensations = 0;
 		num_gcode_length_exceptions = 0;
 		source_file_size = 0;
@@ -481,6 +484,8 @@ struct arc_welder_progress {
 	int points_compressed;
 	int arcs_created;
 	int arcs_aborted_by_flow_rate;
+	int splines_created;
+	int splines_aborted_by_flow_rate;
 	int num_firmware_compensations;
 	int num_gcode_length_exceptions;
 	double compression_ratio;
@@ -522,6 +527,8 @@ struct arc_welder_progress {
 		stream << ", points_compressed: " << points_compressed;
 		stream << ", arcs_created: " << arcs_created;
 		stream << ", arcs_aborted_by_flowrate: " << arcs_aborted_by_flow_rate;
+		stream << ", splines_created: " << splines_created;
+		stream << ", splines_aborted_by_flowrate: " << splines_aborted_by_flow_rate;
 		stream << ", num_firmware_compensations: " << num_firmware_compensations;
 		stream << ", num_gcode_length_exceptions: " << num_gcode_length_exceptions;
 		stream << ", compression_ratio: " << compression_ratio;
@@ -566,6 +573,7 @@ typedef bool(*progress_callback)(arc_welder_progress, logger* p_logger, int logg
 #define DEFAULT_G90_G91_INFLUENCES_EXTRUDER false
 #define DEFAULT_ALLOW_DYNAMIC_PRECISION false
 #define DEFAULT_ALLOW_TRAVEL_ARCS false
+#define DEFAULT_ALLOW_TRAVEL_SPLINES false
 #define DEFAULT_EXTRUSION_RATE_VARIANCE_PERCENT 0.05
 #define DEFAULT_NOTIFICATION_PERIOD_SECONDS 0.5
 
@@ -589,11 +597,14 @@ struct arc_welder_args
 		double resolution_mm;
 		double path_tolerance_percent;
 		double max_radius_mm;
-		int min_arc_segments;
-		double mm_per_arc_segment;
+		int min_segments;
+		double mm_per_segment;
 		bool g90_g91_influences_extruder;
 		bool allow_3d_arcs;
+		bool allow_g5_splines;
+		bool allow_3d_splines;
 		bool allow_travel_arcs;
+		bool allow_travel_splines;
 		bool allow_dynamic_precision;
 		unsigned char default_xyz_precision;
 		unsigned char default_e_precision;
@@ -626,16 +637,19 @@ struct arc_welder_args
 			stream << "\tResolution                   : " << resolution_mm << "mm (+-" << std::setprecision(5) << resolution_mm / 2.0 << "mm)\n";
 			stream << "\tPath Tolerance               : " << std::setprecision(3) << path_tolerance_percent * 100.0 << "%\n";
 			stream << "\tMaximum Arc Radius           : " << std::setprecision(1) << max_radius_mm << "mm\n";
-			bool firmware_compensation_enabled = min_arc_segments > 0 && mm_per_arc_segment > 0.0;
+			bool firmware_compensation_enabled = min_segments > 0 && mm_per_segment > 0.0;
 			stream << "\tFirmware Compensation        : " << (firmware_compensation_enabled ? "True" : "False") << "\n";
 			if (firmware_compensation_enabled)
 			{
-				stream << "\tMin Arc Segments             : " << std::setprecision(0) << min_arc_segments << "\n";
-				stream << "\tMM Per Arc Segment           : " << std::setprecision(3) << mm_per_arc_segment << "\n";
+				stream << "\tMin Segments             : " << std::setprecision(0) << min_segments << "\n";
+				stream << "\tMM Per Segment           : " << std::setprecision(3) << mm_per_segment << "\n";
 			}
-			
+
 			stream << "\tAllow 3D Arcs                : " << (allow_3d_arcs ? "True" : "False") << "\n";
+			stream << "\tAllow G5 Splines             : " << (allow_g5_splines ? "True" : "False") << "\n";
+			stream << "\tAllow 3D Splines             : " << (allow_3d_splines ? "True" : "False") << "\n";
 			stream << "\tAllow Travel Arcs            : " << (allow_travel_arcs ? "True" : "False") << "\n";
+			stream << "\tAllow Travel Splines         : " << (allow_travel_splines ? "True" : "False") << "\n";
 			stream << "\tAllow Dynamic Precision      : " << (allow_dynamic_precision ? "True" : "False") << "\n";
 			stream << "\tDefault XYZ Precision        : " << std::setprecision(0) << static_cast<int>(default_xyz_precision) << "\n";
 			stream << "\tDefault E Precision          : " << std::setprecision(0) << static_cast<int>(default_e_precision) << "\n";
@@ -671,13 +685,16 @@ private:
 			target_path = "",
 			log = NULL,
 			resolution_mm = DEFAULT_RESOLUTION_MM,
-			path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT,
+			path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
 			max_radius_mm = DEFAULT_MAX_RADIUS_MM,
-			min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,
-			mm_per_arc_segment = DEFAULT_MM_PER_ARC_SEGMENT,
+			min_segments = DEFAULT_MIN_SEGMENTS,
+			mm_per_segment = DEFAULT_MM_PER_SEGMENT,
 			g90_g91_influences_extruder = DEFAULT_G90_G91_INFLUENCES_EXTRUDER,
 			allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS,
+			allow_g5_splines = DEFAULT_ALLOW_G5_SPLINES,
+			allow_3d_splines = DEFAULT_ALLOW_3D_SPLINES,
 			allow_travel_arcs = DEFAULT_ALLOW_TRAVEL_ARCS,
+			allow_travel_splines = DEFAULT_ALLOW_TRAVEL_SPLINES,
 			allow_dynamic_precision = DEFAULT_ALLOW_DYNAMIC_PRECISION,
 			default_xyz_precision = DEFAULT_XYZ_PRECISION,
 			default_e_precision = DEFAULT_E_PRECISION,
@@ -725,10 +742,10 @@ private:
 	static gcode_position_args get_args_(bool g90_g91_influences_extruder, int buffer_size);
 	progress_callback progress_callback_;
 	int process_gcode(parsed_command cmd, bool is_end, bool is_reprocess);
-	void write_arc_gcodes(double current_feedrate);
+	void write_gcodes(double current_feedrate, segmented_shape* added_shape);
 	int write_gcode_to_file(std::string gcode);
-	std::string get_arc_gcode(const std::string comment);
-	std::string get_comment_for_arc();
+	std::string get_gcode(const std::string comment, segmented_shape* added_shape);
+	std::string get_gcode_comment(segmented_shape* added_shape);
 	int write_unwritten_gcodes_to_file();
 	std::string create_g92_e(double absolute_e);
 	std::string source_path_;
@@ -737,7 +754,10 @@ private:
 	gcode_position_args gcode_position_args_;
 	bool allow_dynamic_precision_;
 	bool allow_3d_arcs_;
+	bool allow_g5_splines_;
+	bool allow_3d_splines_;
 	bool allow_travel_arcs_;
+	bool allow_travel_splines_;
 	long file_size_;
 	int lines_processed_;
 	int gcodes_processed_;
@@ -745,6 +765,8 @@ private:
 	int points_compressed_;
 	int arcs_created_;
 	int arcs_aborted_by_flow_rate_;
+	int splines_created_;
+	int splines_aborted_by_flow_rate_;
 	double notification_period_seconds_;
 	source_target_segment_statistics segment_statistics_;
 	source_target_segment_statistics segment_retraction_statistics_;
@@ -752,9 +774,11 @@ private:
 	long get_file_size(const std::string& file_path);
 	double get_time_elapsed(double start_clock, double end_clock);
 	double get_next_update_time() const;
-	bool waiting_for_arc_;
+	bool waiting_for_shape_;
 	array_list<unwritten_command> unwritten_commands_;
+	segmented_shape* current_shape_;
 	segmented_arc current_arc_;
+	segmented_spline current_spline_;
 	std::ofstream output_file_;
 
 	// We don't care about the printer settings, except for g91 influences extruder.

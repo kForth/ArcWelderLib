@@ -234,6 +234,26 @@ double utilities::get_arc_distance(double x1, double y1, double z1, double x2, d
 
 }
 
+
+double utilities::get_spline_distance(double x1, double y1, double z1, double x2, double y2, double z2, double i, double j, double p, double q)
+{
+	double control_1_x = x1 + i;
+	double control_1_y = y1 + j;
+	double control_2_x = x2 + p;
+	double control_2_y = y2 + q;
+
+	// TODO: Actuall calculate the spline length
+	double spline_length = utilities::get_cartesian_distance(x1, y1, z1, x2, y2, z2);
+
+	// We may be traveling in 3 space, calculate the length of the 3d spline
+	if (z1 != z2)
+	{
+		spline_length = utilities::hypot(spline_length, z2 - z1);
+	}
+
+	return spline_length; // TODO: Caluclate spline length
+}
+
 std::string utilities::to_string(double value)
 {
 	std::ostringstream os;

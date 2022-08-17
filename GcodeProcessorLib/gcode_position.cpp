@@ -949,6 +949,50 @@ void gcode_position::process_g3(position* pos, parsed_command& cmd)
 	return process_g2(pos, cmd);
 }
 
+void gcode_position::process_g5(position* pos, parsed_command& cmd)
+{
+	bool update_x = false;
+	bool update_y = false;
+	bool update_z = false;
+	bool update_e = false;
+	bool update_f = false;
+	double x = 0;
+	double y = 0;
+	double z = 0;
+	double e = 0;
+	double f = 0;
+	for (unsigned int index = 0; index < cmd.parameters.size(); index++)
+	{
+		const parsed_command_parameter p_cur_param = cmd.parameters[index];
+		if (p_cur_param.name == "X")
+		{
+			update_x = true;
+			x = p_cur_param.double_value;
+		}
+		else if (p_cur_param.name == "Y")
+		{
+			update_y = true;
+			y = p_cur_param.double_value;
+		}
+		else if (p_cur_param.name == "Z")
+		{
+			update_z = true;
+			z = p_cur_param.double_value;
+		}
+		else if (p_cur_param.name == "E")
+		{
+			update_e = true;
+			e = p_cur_param.double_value;
+		}
+		else if (p_cur_param.name == "F")
+		{
+			update_f = true;
+			f = p_cur_param.double_value;
+		}
+	}
+	update_position(pos, x, update_x, y, update_y, z, update_z, e, update_e, f, update_f, false, true);
+}
+
 void gcode_position::process_g10(position* pos, parsed_command& cmd)
 {
 	// Take 0 based extruder parameter in account

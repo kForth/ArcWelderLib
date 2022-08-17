@@ -319,7 +319,7 @@ bool py_gcode_arc_args::parse_args(PyObject* py_args, py_logger* p_py_logger, py
     args.path_tolerance_percent = gcode_arc_converter::PyFloatOrInt_AsDouble(py_path_tolerance_percent);
     if (args.path_tolerance_percent < 0)
     {
-      args.path_tolerance_percent = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT; // Set to the default if no resolution is provided, or if it is less than 0.
+      args.path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT; // Set to the default if no resolution is provided, or if it is less than 0.
     }
   }
 #pragma endregion path_tolerance_percent

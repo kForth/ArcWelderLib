@@ -450,6 +450,20 @@ public:
   virtual std::string interpolate_arc(firmware_position& target, double i, double j, double r, bool is_clockwise);
 
   /// <summary>
+  /// Generate G1 gcode strings separated by line breaks representing the supplied G2/G3 command.
+  /// </summary>
+  /// <param name="current">The current printer position</param>
+  /// <param name="target">The target printer position</param>
+  /// <param name="i">Specifies the X offset for the first control points from the start point.</param>
+  /// <param name="j">Specifies the Y offset for the first control points from the start point.</param>
+  /// <param name="p">Specifies the X offset for the second control points from the end point.</param>
+  /// <param name="q">Specifies the Y offset for the second control points from the end point.</param>
+  /// <param name="is_relative">If this is true, the extruder is currently in relative mode.  Else it is in absolute mode.</param>
+  /// <param name="offest_absolute_e">This is the absolute offset for absolute E coordinates if the extruder is not in relative mode.</param>
+  /// <returns></returns>
+  virtual std::string interpolate_spline(firmware_position& target, double i, double j, double p, double q);
+
+  /// <summary>
   /// Sets the current position.  Should be called before interpolate_arc.
   /// </summary>
   /// <param name="position">The position to set</param>
@@ -499,6 +513,12 @@ public:
   int get_num_arc_segments_generated();
 
   /// <summary>
+  /// Returns the number of spline segments that were generated from g5 commands.
+  /// </summary>
+  /// <returns></returns>
+  int get_num_spline_segments_generated();
+
+  /// <summary>
   /// Outputs a string description of the firmware arguments.
   /// </summary>
   /// <returns></returns>
@@ -529,6 +549,7 @@ protected:
   std::vector<std::string> version_names_;
   int version_index_;
   int num_arc_segments_generated_;
+  int num_spline_segments_generated_;
 
   virtual firmware_arguments arguments_changed(firmware_arguments current_args, firmware_arguments new_args);
 };

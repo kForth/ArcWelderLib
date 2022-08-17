@@ -33,40 +33,29 @@ class segmented_arc :
 public:
 	segmented_arc();
 	segmented_arc(
-		int min_segments = DEFAULT_MIN_SEGMENTS, 
-		int max_segments = DEFAULT_MAX_SEGMENTS, 
-		double resolution_mm = DEFAULT_RESOLUTION_MM, 
-		double path_tolerance_percnet = ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT, 
-		double max_radius_mm = DEFAULT_MAX_RADIUS_MM,
-		int min_arc_segments = DEFAULT_MIN_ARC_SEGMENTS,
-		double mm_per_arc_segment = DEFAULT_MM_PER_ARC_SEGMENT,
-		bool allow_3d_arcs = DEFAULT_ALLOW_3D_ARCS,
+		bool allow_3d_shapes = DEFAULT_ALLOW_3D_ARCS,
+		int min_segments = DEFAULT_MIN_SEGMENTS,
+		int max_segments = DEFAULT_MAX_SEGMENTS,
+		double mm_per_segment = DEFAULT_MM_PER_SEGMENT,
+		double resolution_mm = DEFAULT_RESOLUTION_MM,
+		double path_tolerance_percent = LENGTH_PERCENT_TOLERANCE_DEFAULT,
+		int max_gcode_length = DEFAULT_MAX_GCODE_LENGTH,
 		unsigned char default_xyz_precision = DEFAULT_XYZ_PRECISION,
 		unsigned char default_e_precision = DEFAULT_E_PRECISION,
-		int max_gcode_length = DEFAULT_MAX_GCODE_LENGTH
+
+		double max_radius_mm = DEFAULT_MAX_RADIUS_MM
 	);
 	virtual ~segmented_arc();
-	virtual bool try_add_point(printer_point p);
-	virtual double get_shape_length();
-	std::string get_shape_gcode() const;
-	int get_shape_gcode_length();
-	virtual bool is_shape() const;
-	printer_point pop_front(double e_relative);
-	printer_point pop_back(double e_relative);
+	virtual double get_length();
+	virtual std::string get_gcode() const;
+	virtual int get_gcode_length();
+	const std::string shape_name = "Arc";
+
 	double get_max_radius() const;
-	int get_min_arc_segments() const;
-	double get_mm_per_arc_segment() const;
-	int get_num_firmware_compensations() const;
-	int get_num_gcode_length_exceptions() const;
+protected:
+	virtual bool try_add_point_internal_(printer_point p);
 private:
-	bool try_add_point_internal_(printer_point p);
 	arc current_arc_;
 	double max_radius_mm_;
-	int min_arc_segments_;
-	double mm_per_arc_segment_;
-	int num_firmware_compensations_;
-	bool allow_3d_arcs_;
-	int max_gcode_length_;
-	int num_gcode_length_exceptions_;
 };															
 

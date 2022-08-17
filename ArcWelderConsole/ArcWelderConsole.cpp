@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
   arg_description_stream.clear();
   arg_description_stream.str("");
   arg_description_stream << "This is the maximum allowable difference between the arc path and the original toolpath.";
-  arg_description_stream << " Expressed as a decimal percent, where 0.05 = 5.0%. The lower this value is, the more arcs will be aborted, but values over 0.25 (25%) are not recommended, as they could negatively impact print quality. Restrictions: Only values greater than 0 (0%) and less than 1.0 (100%) are allowed. Default Value: " << ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT << " (" << ARC_LENGTH_PERCENT_TOLERANCE_DEFAULT * 100 << "%)";
+  arg_description_stream << " Expressed as a decimal percent, where 0.05 = 5.0%. The lower this value is, the more arcs will be aborted, but values over 0.25 (25%) are not recommended, as they could negatively impact print quality. Restrictions: Only values greater than 0 (0%) and less than 1.0 (100%) are allowed. Default Value: " << LENGTH_PERCENT_TOLERANCE_DEFAULT << " (" << LENGTH_PERCENT_TOLERANCE_DEFAULT * 100 << "%)";
   TCLAP::ValueArg<double> path_tolerance_percent_arg("t", "path-tolerance-percent", arg_description_stream.str(), false, DEFAULT_RESOLUTION_MM, "float");
 
   // -m --max-radius-mm
@@ -97,6 +97,18 @@ int main(int argc, char* argv[])
   arg_description_stream.str("");
   arg_description_stream << "(experimental) - If supplied, 3D arcs will be allowed (supports spiral vase mode). Not all firmware supports this. Default Value: " << DEFAULT_ALLOW_3D_ARCS;
   TCLAP::SwitchArg allow_3d_arcs_arg("z", "allow-3d-arcs", arg_description_stream.str(), DEFAULT_ALLOW_3D_ARCS);
+
+  // -b --allow-g5-splines
+  arg_description_stream.clear();
+  arg_description_stream.str("");
+  arg_description_stream << "(experimental) - If supplied, G5 bezier spline moves will be allowed. Not all firmware supports this. Default Value: " << DEFAULT_ALLOW_G5_SPLINES;
+  TCLAP::SwitchArg allow_g5_splines_arg("b", "allow-g5-splines", arg_description_stream.str(), DEFAULT_ALLOW_G5_SPLINES);
+
+  // -q --allow-3d-splines
+  arg_description_stream.clear();
+  arg_description_stream.str("");
+  arg_description_stream << "(experimental) - If supplied, 3D splines will be allowed (supports spiral vase mode). Not all firmware supports this. Default Value: " << DEFAULT_ALLOW_3D_SPLINES;
+  TCLAP::SwitchArg allow_3d_splines_arg("q", "allow-3d-splines", arg_description_stream.str(), DEFAULT_ALLOW_3D_SPLINES);
 
   // -y --allow-travel-arcs
   arg_description_stream.clear();
@@ -122,17 +134,17 @@ int main(int argc, char* argv[])
   arg_description_stream << "The default precision of E output gcode parameters. The precision may be larger than this value if allow-dynamic-precision is set to true. Restrictions: Allowed values are 3, 4, 5, or 6. Default Value: " << DEFAULT_E_PRECISION;
   TCLAP::ValueArg<unsigned int> default_e_precision_arg("e", "default-e-precision", arg_description_stream.str(), false, DEFAULT_E_PRECISION, "unsigned int");
 
-  // -s --mm-per-arc-segment
+  // -s --mm-per-segment
   arg_description_stream.clear();
   arg_description_stream.str("");
-  arg_description_stream << "The mm per arc segment as defined in your firmware. Used to compensate for firmware without min-arc-segments setting. Restrictions: Only values greater than or equal to 0.0 are allowed. If set greater than 0, min-arc-segments must also be set. Default Value: " << DEFAULT_MM_PER_ARC_SEGMENT;
-  TCLAP::ValueArg<double> mm_per_arc_segment_arg("s", "mm-per-arc-segment", arg_description_stream.str(), false, DEFAULT_MM_PER_ARC_SEGMENT, "float");
+  arg_description_stream << "The mm per arc segment as defined in your firmware. Used to compensate for firmware without min-segments setting. Restrictions: Only values greater than or equal to 0.0 are allowed. If set greater than 0, min-segments must also be set. Default Value: " << DEFAULT_MM_PER_SEGMENT;
+  TCLAP::ValueArg<double> mm_per_segment_arg("s", "mm-per-segment", arg_description_stream.str(), false, DEFAULT_MM_PER_SEGMENT, "float");
 
-  // -a --min-arc-segments
+  // -a --min-segments
   arg_description_stream.clear();
   arg_description_stream.str("");
-  arg_description_stream << "The minimum number of segments in a full circle of the same radius as any given arc. Used to compensate for firmware without min-arc-segments setting. Restrictions: Only values greater than or equal to 0.0 are allowed. If set greater than 0, mm-per-arc-segment must also be set. Default Value: " << DEFAULT_MIN_ARC_SEGMENTS;
-  TCLAP::ValueArg<int> min_arc_segments_arg("a", "min-arc-segments", arg_description_stream.str(), false, DEFAULT_MIN_ARC_SEGMENTS, "int");
+  arg_description_stream << "The minimum number of segments in a full circle of the same radius as any given arc. Used to compensate for firmware without min-segments setting. Restrictions: Only values greater than or equal to 0.0 are allowed. If set greater than 0, mm-per-segment must also be set. Default Value: " << DEFAULT_MIN_SEGMENTS;
+  TCLAP::ValueArg<int> min_segments_arg("a", "min-segments", arg_description_stream.str(), false, DEFAULT_MIN_SEGMENTS, "int");
 
   // -v --extrusion-rate-variance
   arg_description_stream.clear();
@@ -180,9 +192,11 @@ int main(int argc, char* argv[])
   cmd.add(resolution_arg);
   cmd.add(path_tolerance_percent_arg);
   cmd.add(max_radius_arg);
-  cmd.add(min_arc_segments_arg);
-  cmd.add(mm_per_arc_segment_arg);
+  cmd.add(min_segments_arg);
+  cmd.add(mm_per_segment_arg);
   cmd.add(allow_3d_arcs_arg);
+  cmd.add(allow_g5_splines_arg);
+  cmd.add(allow_3d_splines_arg);
   cmd.add(allow_travel_arcs_arg);
   cmd.add(allow_dynamic_precision_arg);
   cmd.add(default_xyz_precision_arg);
@@ -209,10 +223,12 @@ int main(int argc, char* argv[])
 
     args.resolution_mm = resolution_arg.getValue();
     args.max_radius_mm = max_radius_arg.getValue();
-    args.min_arc_segments = min_arc_segments_arg.getValue();
-    args.mm_per_arc_segment = mm_per_arc_segment_arg.getValue();
+    args.min_segments = min_segments_arg.getValue();
+    args.mm_per_segment = mm_per_segment_arg.getValue();
     args.path_tolerance_percent = path_tolerance_percent_arg.getValue();
     args.allow_3d_arcs = allow_3d_arcs_arg.getValue();
+    args.allow_g5_splines = allow_g5_splines_arg.getValue();
+    args.allow_3d_splines = allow_3d_splines_arg.getValue();
     args.allow_travel_arcs = allow_travel_arcs_arg.getValue();
     args.g90_g91_influences_extruder = g90_arg.getValue();
     args.allow_dynamic_precision = allow_dynamic_precision_arg.getValue();
@@ -245,23 +261,23 @@ int main(int argc, char* argv[])
         throw TCLAP::ArgException("The provided value is greater than or equal to 1 (100%).", path_tolerance_percent_arg.toString());
     }
 
-    if (args.mm_per_arc_segment < 0)
+    if (args.mm_per_segment < 0)
     {
-        throw TCLAP::ArgException("The provided value is negative.", mm_per_arc_segment_arg.toString());
+        throw TCLAP::ArgException("The provided value is negative.", mm_per_segment_arg.toString());
     }
 
-    if (args.min_arc_segments < 0)
+    if (args.min_segments < 0)
     {
-        throw TCLAP::ArgException("The provided value is negative.", min_arc_segments_arg.toString());
+        throw TCLAP::ArgException("The provided value is negative.", min_segments_arg.toString());
     }
 
-    if (args.mm_per_arc_segment != 0.0 && args.min_arc_segments == 0)
+    if (args.mm_per_segment != 0.0 && args.min_segments == 0)
     {
-        throw TCLAP::ArgException("You must also specify a non zero value for the " + min_arc_segments_arg.toString() + " argument.", mm_per_arc_segment_arg.toString());
+        throw TCLAP::ArgException("You must also specify a non zero value for the " + min_segments_arg.toString() + " argument.", mm_per_segment_arg.toString());
     }
-    else if (args.mm_per_arc_segment == 0.0 && args.min_arc_segments != 0)
+    else if (args.mm_per_segment == 0.0 && args.min_segments != 0)
     {
-        throw TCLAP::ArgException("You must also specify a non zero value for the " + mm_per_arc_segment_arg.toString() + " argument.", min_arc_segments_arg.toString());
+        throw TCLAP::ArgException("You must also specify a non zero value for the " + mm_per_segment_arg.toString() + " argument.", min_segments_arg.toString());
     }
 
     if (args.default_xyz_precision < 3)
@@ -345,6 +361,7 @@ int main(int argc, char* argv[])
   catch (TCLAP::ArgException& e)
   {
     // This will raise an exit exception
+    throw e;
     cmd.getOutput()->failure(cmd, e);
     return 1;
   }

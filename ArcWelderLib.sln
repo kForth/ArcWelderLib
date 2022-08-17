@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 16.0.30011.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArcWelder", "ArcWelder\ArcWelder.vcxproj", "{1A4DBAB1-BB42-4DB1-B168-F113784EFCEF}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F995D254-2431-46AB-90DD-0DD6408DF43C} = {F995D254-2431-46AB-90DD-0DD6408DF43C}
+		{31478BAE-104B-4CC3-9876-42FA90CBD5FE} = {31478BAE-104B-4CC3-9876-42FA90CBD5FE}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GcodeProcessorLib", "GcodeProcessorLib\GcodeProcessorLib.vcxproj", "{31478BAE-104B-4CC3-9876-42FA90CBD5FE}"
 EndProject
@@ -32,6 +36,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TCLAP", "TCLAP\TCLAP.vcxproj", "{38302600-81A7-45BB-A199-3360D6594365}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BSpline", "bspline\BSpline\BSpline.vcxproj", "{F995D254-2431-46AB-90DD-0DD6408DF43C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -154,6 +160,21 @@ Global
 		{38302600-81A7-45BB-A199-3360D6594365}.Remote_Pi|x64.Build.0 = Remote_Pi|x64
 		{38302600-81A7-45BB-A199-3360D6594365}.Remote_Pi|x86.ActiveCfg = Remote_Pi|Win32
 		{38302600-81A7-45BB-A199-3360D6594365}.Remote_Pi|x86.Build.0 = Remote_Pi|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Debug|ARM.ActiveCfg = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Debug|x64.ActiveCfg = Debug|x64
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Debug|x64.Build.0 = Debug|x64
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Debug|x86.ActiveCfg = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Debug|x86.Build.0 = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Release|ARM.ActiveCfg = Release|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Release|x64.ActiveCfg = Release|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Release|x86.ActiveCfg = Release|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Release|x86.Build.0 = Release|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|ARM.ActiveCfg = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|ARM.Build.0 = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|x64.ActiveCfg = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|x64.Build.0 = Debug|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|x86.ActiveCfg = Release|Win32
+		{F995D254-2431-46AB-90DD-0DD6408DF43C}.Remote_Pi|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

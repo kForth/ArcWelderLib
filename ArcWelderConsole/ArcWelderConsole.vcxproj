@@ -214,6 +214,9 @@
     <ProjectReference Include="..\ArcWelder\ArcWelder.vcxproj">
       <Project>{1a4dbab1-bb42-4db1-b168-f113784efcef}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\bspline\BSpline\BSpline.vcxproj">
+      <Project>{f995d254-2431-46ab-90dd-0dd6408df43c}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\GcodeProcessorLib\GcodeProcessorLib.vcxproj">
       <Project>{31478bae-104b-4cc3-9876-42fa90cbd5fe}</Project>
     </ProjectReference>

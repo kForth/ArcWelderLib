@@ -46,7 +46,12 @@ firmware::firmware(firmware_arguments args) : args_(args) {
 
 std::string firmware::interpolate_arc(firmware_position& target, double i, double j, double r, bool is_clockwise)
 {
-  throw "Function not yet implemented";
+    throw "Function not yet implemented";
+}
+
+std::string firmware::interpolate_spline(firmware_position& target, double i, double j, double p, double q)
+{
+    throw "Function not yet implemented";
 }
 
 void firmware::apply_arguments()
@@ -66,7 +71,13 @@ void firmware::set_current_state(firmware_state& state)
 
 int firmware::get_num_arc_segments_generated()
 {
-  return num_arc_segments_generated_;
+    return num_arc_segments_generated_;
+}
+
+
+int firmware::get_num_spline_segments_generated()
+{
+    return num_spline_segments_generated_;
 }
 
 std::string firmware::g1_command(firmware_position& target)
